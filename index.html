@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ভিডিও আনলকার</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #4285f4;
+            color: white;
+            cursor: pointer;
+        }
+        .toggle-form {
+            text-align: center;
+            margin-top: 10px;
+            color: #4285f4;
+            cursor: pointer;
+        }
+        .chat-container {
+            border: 1px solid #ddd;
+            height: 65vh;
+            overflow-y: auto;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .video-card {
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .video-card img {
+            max-width: 100%;
+            height: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .logout-btn {
+            background: #dc3545;
+            width: auto;
+            padding: 8px 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 ভিডিও আনলকার</h1>
+            <button id="logout-btn" class="logout-btn" style="display:none" onclick="logout()">লগ আউট</button>
+        </div>
+        
+        <!-- সাইনআপ ফর্ম (ডিফল্টভাবে দেখাবে) -->
+        <div id="signup-form">
+            <h3>সাইনআপ করুন</h3>
+            <div class="form-group">
+                <input type="email" id="signup-email" placeholder="ইমেইল">
+                <input type="password" id="signup-password" placeholder="পাসওয়ার্ড (৬+ অক্ষর)">
+                <button onclick="signup()">সাইনআপ</button>
+            </div>
+            <div class="toggle-form" onclick="showLogin()">ইতিমধ্যে অ্যাকাউন্ট আছে? লগইন করুন</div>
+        </div>
+
+        <!-- লগইন ফর্ম (প্রথমে লুকানো) -->
+        <div id="login-form" style="display:none">
+            <h3>লগইন করুন</h3>
+            <div class="form-group">
+                <input type="email" id="login-email" placeholder="ইমেইল">
+                <input type="password" id="login-password" placeholder="পাসওয়ার্ড">
+                <button onclick="login()">লগইন</button>
+            </div>
+            <div class="toggle-form" onclick="showSignup()">অ্যাকাউন্ট নেই? সাইনআপ করুন</div>
+        </div>
+
+        <!-- ইউজার ইন্টারফেস (লগইন成功后 দেখাবে) -->
+        <div id="user-interface" style="display:none">
+            <div class="chat-container" id="chat-history"></div>
+            <div class="input-box">
+                <input type="text" id="video-code" placeholder="ভিডিও কোড লিখুন...">
+                <button onclick="sendCode()">সেন্ড</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
+    <script>
+        // Firebase কনফিগ
+        const firebaseConfig = {
+            apiKey: "AIzaSyAd1el8ko20oEqfhnPByn9ymd3SEpgQuTw",
+            authDomain: "file-store-bot-fd9a8.firebaseapp.com",
+            databaseURL: "https://file-store-bot-fd9a8-default-rtdb.firebaseio.com",
+            projectId: "file-store-bot-fd9a8",
+            storageBucket: "file-store-bot-fd9a8.firebasestorage.app",
+            messagingSenderId: "749621163821",
+            appId: "1:749621163821:web:e0ab7bb2f2b1d88ab085a4"
+        };
+
+        // Firebase ইনিশিয়ালাইজ
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+
+        // পেজ লোড হলে ইউজার স্ট্যাটাস চেক করুন
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // ইউজার লগইন করা আছে
+                document.getElementById('signup-form').style.display = 'none';
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('user-interface').style.display = 'block';
+                document.getElementById('logout-btn').style.display = 'block';
+                loadChatHistory();
+            } else {
+                // ইউজার লগইন করা নেই
+                document.getElementById('signup-form').style.display = 'block';
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('user-interface').style.display = 'none';
+                document.getElementById('logout-btn').style.display = 'none';
+            }
+        });
+
+        // ফর্ম টগল ফাংশন
+        function showLogin() {
+            document.getElementById('signup-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+        }
+        function showSignup() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('signup-form').style.display = 'block';
+        }
+
+        // সাইনআপ ফাংশন
+        function signup() {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            
+            if (password.length < 6) {
+                alert('পাসওয়ার্ডে কমপক্ষে ৬ অক্ষর থাকতে হবে!');
+                return;
+            }
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(() => {
+                    alert('✅ সাইনআপ সফল! এখন লগইন করুন');
+                    showLogin();
+                })
+                .catch(error => alert('ত্রুটি: ' + error.message));
+        }
+
+        // লগইন ফাংশন
+        function login() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                .then(() => {
+                    return auth.signInWithEmailAndPassword(email, password);
+                })
+                .catch(error => alert('ত্রুটি: ' + error.message));
+        }
+
+        // লগআউট ফাংশন
+        function logout() {
+            auth.signOut().then(() => {
+                alert('✅ সফলভাবে লগ আউট হয়েছে');
+            }).catch(error => {
+                alert('ত্রুটি: ' + error.message);
+            });
+        }
+
+        // চ্যাট হিস্ট্রি লোড
+        function loadChatHistory() {
+            const userId = auth.currentUser.uid;
+            database.ref('chats/' + userId).on('value', (snapshot) => {
+                const chats = snapshot.val();
+                let chatHTML = '';
+                for (const key in chats) {
+                    const chat = chats[key];
+                    chatHTML += `
+                        <div class="video-card">
+                            <h3>${chat.code}</h3>
+                            <img src="${chat.thumb}" alt="Thumbnail">
+                            <p>${chat.desc}</p>
+                            <a href="${chat.link}" target="_blank">ডাউনলোড</a>
+                        </div>
+                    `;
+                }
+                document.getElementById('chat-history').innerHTML = chatHTML;
+            });
+        }
+
+        // ভিডিও কোড সেন্ড
+        function sendCode() {
+            const code = document.getElementById('video-code').value.trim();
+            if (!code) return;
+
+            const userId = auth.currentUser.uid;
+            database.ref('videos/' + code).once('value')
+                .then(snapshot => {
+                    const video = snapshot.val();
+                    if (video) {
+                        database.ref('chats/' + userId).push().set({
+                            code: code,
+                            thumb: video.thumb,
+                            desc: video.desc,
+                            link: video.link,
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        });
+                    } else {
+                        alert('❌ ভিডিও খুঁজে পাওয়া যায়নি!');
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
